@@ -13,6 +13,10 @@ export def ImproveEnglish(line1: number, line2: number)
     var backend = get(g:, 'english_backend', 'claude')
     var result: string
 
+    var pending_pat = '\%>' .. (line1 - 1) .. 'l.\+\%<' .. (line2 + 1) .. 'l'
+    var match_id = matchadd('ImproveEnglishPending', pending_pat)
+    redraw
+
     if backend == 'claude'
         var model = get(g:, 'english_model', '')
         var cmd = 'claude -p ' .. shellescape(prompt) .. ' --output-format text'
@@ -22,9 +26,12 @@ export def ImproveEnglish(line1: number, line2: number)
         echo 'Improving English...'
         result = system(cmd, text)
     else
+        matchdelete(match_id)
         echoerr 'ImproveEnglish: unknown backend "' .. backend .. '"'
         return
     endif
+
+    matchdelete(match_id)
 
     if v:shell_error != 0 || result == ''
         echoerr 'ImproveEnglish failed'

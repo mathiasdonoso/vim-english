@@ -12,6 +12,8 @@ if !exists('g:english_model')
     g:english_model = 'claude-haiku-4-5-20251001'
 endif
 
+highlight default ImproveEnglishPending cterm=italic ctermfg=darkgrey gui=italic guifg=#888888
+
 command -range=% ImproveEnglish call english#ImproveEnglish(<line1>, <line2>)
 
 xnoremap <leader>ie :<C-u>'<,'>ImproveEnglish<CR>
