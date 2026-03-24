@@ -4,6 +4,10 @@ For non-native English speakers who write a lot of code comments, commit message
 
 Select any text in Vim and have it corrected and improved in place by an AI.
 
+## Motivation
+
+Because sometimes you want to write code on your own. Keeping your programming skills sharp means resisting the urge to offload every problem to an AI — and that is a deliberate choice worth protecting. But when English is not your first language, writing clear comments and docs gets in the way. This plugin helps with just that.
+
 ## Requirements
 
 - Vim 9.0+
