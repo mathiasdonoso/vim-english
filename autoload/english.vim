@@ -5,7 +5,9 @@ var job_id_counter: number = 0
 var spinner_tick: number = 0
 const spinner_frames: list<string> = [' .', ' ..', ' ...']
 
-prop_type_add('ImproveEnglishSpinner', {highlight: 'ImproveEnglishSpinner'})
+if empty(prop_type_get('ImproveEnglishSpinner'))
+    prop_type_add('ImproveEnglishSpinner', {highlight: 'ImproveEnglishSpinner'})
+endif
 
 def OutCb(jid: number, ch: channel, data: string)
     if has_key(jobs, string(jid)) && data != ''
@@ -75,10 +77,18 @@ export def ImproveEnglish(line1: number, line2: number)
     endif
 
     var prompt = get(g:, 'english_prompt', '')
+    if empty(prompt)
+        prompt = 'Improve the English grammar, clarity, and style of the following text. Preserve the original meaning and structure. Output ONLY the improved text with no preamble, explanations, or comments.'
+    endif
     var backend = get(g:, 'english_backend', 'claude')
 
     if backend != 'claude'
         echoerr 'ImproveEnglish: unknown backend "' .. backend .. '"'
+        return
+    endif
+
+    if !executable(backend)
+        echoerr 'ImproveEnglish: backend executable "' .. backend .. '" not found in PATH'
         return
     endif
 
