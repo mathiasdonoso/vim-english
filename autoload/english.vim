@@ -10,7 +10,7 @@ if empty(prop_type_get('ImproveEnglishSpinner'))
 endif
 
 def OutCb(jid: number, ch: channel, data: string)
-    if has_key(jobs, string(jid)) && data != ''
+    if has_key(jobs, string(jid))
         add(jobs[string(jid)].output, data)
     endif
 enddef
@@ -88,7 +88,7 @@ def ExitCb(jid: number, j: job, status: number)
     endif
     var result = join(state.output, "\n")
     var trimmed = substitute(result, '\n\+$', '', '')
-    var new_lines = split(trimmed, "\n")
+    var new_lines = split(trimmed, "\n", 1)
     deletebufline(state.bufnr, state.line1, state.line2)
     appendbufline(state.bufnr, state.line1 - 1, new_lines)
     echo 'English improved'
