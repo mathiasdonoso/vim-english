@@ -39,6 +39,20 @@ def SpinnerTick(jid: number, timer_id: number)
     redraw
 enddef
 
+def TimeoutHandler(jid: number, timer_id: number)
+    if !has_key(jobs, string(jid))
+        return
+    endif
+    var state = jobs[string(jid)]
+    remove(jobs, string(jid))
+    timer_stop(state.timer_id)
+    job_stop(state.job)
+    prop_remove({type: 'ImproveEnglishSpinner', bufnr: state.bufnr, all: true})
+    echo ''
+    matchdelete(state.match_id)
+    echoerr 'ImproveEnglish: timed out'
+enddef
+
 def ExitCb(jid: number, j: job, status: number)
     if !has_key(jobs, string(jid))
         return
@@ -46,6 +60,7 @@ def ExitCb(jid: number, j: job, status: number)
     var state = jobs[string(jid)]
     remove(jobs, string(jid))
     timer_stop(state.timer_id)
+    timer_stop(state.timeout_id)
     prop_remove({type: 'ImproveEnglishSpinner', bufnr: state.bufnr, all: true})
     echo ''
     matchdelete(state.match_id)
@@ -76,6 +91,7 @@ def ExitCb(jid: number, j: job, status: number)
     var new_lines = split(trimmed, "\n")
     deletebufline(state.bufnr, state.line1, state.line2)
     appendbufline(state.bufnr, state.line1 - 1, new_lines)
+    echo 'English improved'
 enddef
 
 export def ImproveEnglish(line1: number, line2: number)
@@ -132,14 +148,19 @@ export def ImproveEnglish(line1: number, line2: number)
         return
     endif
 
+    var timeout_ms = get(g:, 'english_timeout', 30000)
+
     jobs[string(jid)] = {bufnr: buf, line1: line1, line2: line2,
                          match_id: match_id, output: [], err_lines: [],
-                         original_lines: lines, timer_id: 0}
+                         original_lines: lines, job: job, timer_id: 0, timeout_id: 0}
     ch_sendraw(job_getchannel(job), text)
     ch_close_in(job_getchannel(job))
 
     var tid = timer_start(400, (t) => SpinnerTick(jid, t), {repeat: -1})
     jobs[string(jid)].timer_id = tid
+
+    var xid = timer_start(timeout_ms, (t) => TimeoutHandler(jid, t))
+    jobs[string(jid)].timeout_id = xid
 
     echo 'Improving English .'
     prop_add(line1, 0, {type: 'ImproveEnglishSpinner', text: ' .', text_align: 'after'})
