@@ -28,9 +28,14 @@ def SpinnerTick(jid: number, timer_id: number)
     spinner_tick = (spinner_tick + 1) % 3
     var frame = spinner_frames[spinner_tick]
     var state = jobs[string(jid)]
+    var cur_prop = prop_find({type: state.anchor_start_type, lnum: 1, bufnr: state.bufnr})
+    if empty(cur_prop)
+        return
+    endif
+    var cur_line = cur_prop.lnum
     echo 'Improving English' .. frame
-    prop_remove({type: 'ImproveEnglishSpinner', bufnr: state.bufnr, all: true}, state.line1, state.line1)
-    prop_add(state.line1, 0, {
+    prop_remove({type: 'ImproveEnglishSpinner', bufnr: state.bufnr, all: true})
+    prop_add(cur_line, 0, {
         type:       'ImproveEnglishSpinner',
         text:       frame,
         text_align: 'after',
@@ -48,8 +53,11 @@ def TimeoutHandler(jid: number, timer_id: number)
     timer_stop(state.timer_id)
     job_stop(state.job)
     prop_remove({type: 'ImproveEnglishSpinner', bufnr: state.bufnr, all: true})
+    prop_remove({type: state.pending_type, bufnr: state.bufnr, all: true})
+    prop_type_delete(state.pending_type)
+    prop_type_delete(state.anchor_start_type)
+    prop_type_delete(state.anchor_end_type)
     echo ''
-    matchdelete(state.match_id)
     echoerr 'ImproveEnglish: timed out'
 enddef
 
@@ -62,9 +70,12 @@ def ExitCb(jid: number, j: job, status: number)
     timer_stop(state.timer_id)
     timer_stop(state.timeout_id)
     prop_remove({type: 'ImproveEnglishSpinner', bufnr: state.bufnr, all: true})
+    prop_remove({type: state.pending_type, bufnr: state.bufnr, all: true})
+    prop_type_delete(state.pending_type)
     echo ''
-    matchdelete(state.match_id)
     if status != 0 || empty(state.output)
+        prop_type_delete(state.anchor_start_type)
+        prop_type_delete(state.anchor_end_type)
         var msg = 'ImproveEnglish failed'
         var err_detail = ''
         for line in state.err_lines
@@ -80,10 +91,22 @@ def ExitCb(jid: number, j: job, status: number)
         return
     endif
     if !bufexists(state.bufnr)
+        prop_type_delete(state.anchor_start_type)
+        prop_type_delete(state.anchor_end_type)
         return
     endif
-    if getbufline(state.bufnr, state.line1, state.line2) != state.original_lines
-        echoerr 'ImproveEnglish: buffer changed while job was running, result discarded'
+    var start_prop = prop_find({type: state.anchor_start_type, lnum: 1, bufnr: state.bufnr})
+    var end_prop   = prop_find({type: state.anchor_end_type,   lnum: 1, bufnr: state.bufnr})
+    prop_type_delete(state.anchor_start_type)
+    prop_type_delete(state.anchor_end_type)
+    if empty(start_prop) || empty(end_prop)
+        echoerr 'ImproveEnglish: selected text was deleted, result discarded'
+        return
+    endif
+    var new_line1 = start_prop.lnum
+    var new_line2 = end_prop.lnum
+    if getbufline(state.bufnr, new_line1, new_line2) != state.original_lines
+        echoerr 'ImproveEnglish: selected text was modified, result discarded'
         return
     endif
     var result = join(state.output, "\n")
@@ -95,8 +118,8 @@ def ExitCb(jid: number, j: job, status: number)
         return
     endif
     var new_lines = split(trimmed, "\n", 1)
-    deletebufline(state.bufnr, state.line1, state.line2)
-    appendbufline(state.bufnr, state.line1 - 1, new_lines)
+    deletebufline(state.bufnr, new_line1, new_line2)
+    appendbufline(state.bufnr, new_line1 - 1, new_lines)
     echo 'English improved'
 enddef
 
@@ -133,12 +156,25 @@ export def ImproveEnglish(line1: number, line2: number)
         cmd->add(model)
     endif
 
-    var pending_pat = '\%>' .. (line1 - 1) .. 'l.\+\%<' .. (line2 + 1) .. 'l'
-    var match_id = matchadd('ImproveEnglishPending', pending_pat)
     var buf = bufnr('%')
 
     job_id_counter += 1
     var jid = job_id_counter
+
+    var start_type   = 'ImproveEnglishAnchorStart_' .. jid
+    var end_type     = 'ImproveEnglishAnchorEnd_' .. jid
+    var pending_type = 'ImproveEnglishPending_' .. jid
+    prop_type_add(start_type, {})
+    prop_type_add(end_type, {})
+    prop_type_add(pending_type, {highlight: 'ImproveEnglishPending'})
+    prop_add(line1, 1, {type: start_type, bufnr: buf})
+    prop_add(line2, 1, {type: end_type,   bufnr: buf})
+    prop_add(line1, 1, {
+        type:     pending_type,
+        end_lnum: line2,
+        end_col:  len(getline(line2)) + 1,
+        bufnr:    buf,
+    })
 
     var job = job_start(cmd, {
         in_io:   'pipe',
@@ -150,7 +186,10 @@ export def ImproveEnglish(line1: number, line2: number)
     })
 
     if job_status(job) == 'fail'
-        matchdelete(match_id)
+        prop_remove({type: pending_type, bufnr: buf, all: true})
+        prop_type_delete(pending_type)
+        prop_type_delete(start_type)
+        prop_type_delete(end_type)
         echoerr 'ImproveEnglish: failed to start backend'
         return
     endif
@@ -158,8 +197,9 @@ export def ImproveEnglish(line1: number, line2: number)
     var timeout_ms = get(g:, 'english_timeout', 30000)
 
     jobs[string(jid)] = {bufnr: buf, line1: line1, line2: line2,
-                         match_id: match_id, output: [], err_lines: [],
-                         original_lines: lines, job: job, timer_id: 0, timeout_id: 0}
+                         pending_type: pending_type, output: [], err_lines: [],
+                         original_lines: lines, job: job, timer_id: 0, timeout_id: 0,
+                         anchor_start_type: start_type, anchor_end_type: end_type}
     ch_sendraw(job_getchannel(job), text)
     ch_close_in(job_getchannel(job))
 
