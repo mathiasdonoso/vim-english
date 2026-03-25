@@ -16,8 +16,8 @@ def OutCb(jid: number, ch: channel, data: string)
 enddef
 
 def ErrCb(jid: number, ch: channel, data: string)
-    if has_key(jobs, string(jid)) && jobs[string(jid)].err == ''
-        jobs[string(jid)].err = data
+    if has_key(jobs, string(jid)) && data != ''
+        add(jobs[string(jid)].err_lines, data)
     endif
 enddef
 
@@ -29,7 +29,7 @@ def SpinnerTick(jid: number, timer_id: number)
     var frame = spinner_frames[spinner_tick]
     var state = jobs[string(jid)]
     echo 'Improving English' .. frame
-    prop_remove({type: 'ImproveEnglishSpinner', bufnr: state.bufnr, all: true})
+    prop_remove({type: 'ImproveEnglishSpinner', bufnr: state.bufnr, all: true}, state.line1, state.line1)
     prop_add(state.line1, 0, {
         type:       'ImproveEnglishSpinner',
         text:       frame,
@@ -51,13 +51,24 @@ def ExitCb(jid: number, j: job, status: number)
     matchdelete(state.match_id)
     if status != 0 || empty(state.output)
         var msg = 'ImproveEnglish failed'
-        if state.err != '' && len(state.err) <= 80
-            msg ..= ': ' .. state.err
+        var err_detail = ''
+        for line in state.err_lines
+            if len(line) <= 80
+                err_detail = line
+                break
+            endif
+        endfor
+        if err_detail != ''
+            msg ..= ': ' .. err_detail
         endif
         echoerr msg
         return
     endif
     if !bufexists(state.bufnr)
+        return
+    endif
+    if getbufline(state.bufnr, state.line1, state.line2) != state.original_lines
+        echoerr 'ImproveEnglish: buffer changed while job was running, result discarded'
         return
     endif
     var result = join(state.output, "\n")
@@ -122,7 +133,8 @@ export def ImproveEnglish(line1: number, line2: number)
     endif
 
     jobs[string(jid)] = {bufnr: buf, line1: line1, line2: line2,
-                         match_id: match_id, output: [], err: '', timer_id: 0}
+                         match_id: match_id, output: [], err_lines: [],
+                         original_lines: lines, timer_id: 0}
     ch_sendraw(job_getchannel(job), text)
     ch_close_in(job_getchannel(job))
 
