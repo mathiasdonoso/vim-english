@@ -2,6 +2,10 @@ vim9script
 
 var jobs: dict<dict<any>> = {}
 var job_id_counter: number = 0
+var spinner_tick: number = 0
+const spinner_frames: list<string> = [' .', ' ..', ' ...']
+
+prop_type_add('ImproveEnglishSpinner', {highlight: 'ImproveEnglishSpinner'})
 
 def OutCb(jid: number, ch: channel, data: string)
     if has_key(jobs, string(jid)) && data != ''
@@ -15,12 +19,33 @@ def ErrCb(jid: number, ch: channel, data: string)
     endif
 enddef
 
+def SpinnerTick(jid: number, timer_id: number)
+    if !has_key(jobs, string(jid))
+        return
+    endif
+    spinner_tick = (spinner_tick + 1) % 3
+    var frame = spinner_frames[spinner_tick]
+    var state = jobs[string(jid)]
+    echo 'Improving English' .. frame
+    prop_remove({type: 'ImproveEnglishSpinner', bufnr: state.bufnr, all: true})
+    prop_add(state.line1, 0, {
+        type:       'ImproveEnglishSpinner',
+        text:       frame,
+        text_align: 'after',
+        bufnr:      state.bufnr,
+    })
+    redraw
+enddef
+
 def ExitCb(jid: number, j: job, status: number)
     if !has_key(jobs, string(jid))
         return
     endif
     var state = jobs[string(jid)]
     remove(jobs, string(jid))
+    timer_stop(state.timer_id)
+    prop_remove({type: 'ImproveEnglishSpinner', bufnr: state.bufnr, all: true})
+    echo ''
     matchdelete(state.match_id)
     if status != 0 || empty(state.output)
         var msg = 'ImproveEnglish failed'
@@ -86,8 +111,15 @@ export def ImproveEnglish(line1: number, line2: number)
         return
     endif
 
-    jobs[string(jid)] = {bufnr: buf, line1: line1, line2: line2, match_id: match_id, output: [], err: ''}
+    jobs[string(jid)] = {bufnr: buf, line1: line1, line2: line2,
+                         match_id: match_id, output: [], err: '', timer_id: 0}
     ch_sendraw(job_getchannel(job), text)
     ch_close_in(job_getchannel(job))
-    echo 'Improving English...'
+
+    var tid = timer_start(400, (t) => SpinnerTick(jid, t), {repeat: -1})
+    jobs[string(jid)].timer_id = tid
+
+    echo 'Improving English .'
+    prop_add(line1, 0, {type: 'ImproveEnglishSpinner', text: ' .', text_align: 'after'})
+    redraw
 enddef
