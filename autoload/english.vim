@@ -9,6 +9,12 @@ def OutCb(jid: number, ch: channel, data: string)
     endif
 enddef
 
+def ErrCb(jid: number, ch: channel, data: string)
+    if has_key(jobs, string(jid)) && jobs[string(jid)].err == ''
+        jobs[string(jid)].err = data
+    endif
+enddef
+
 def ExitCb(jid: number, j: job, status: number)
     if !has_key(jobs, string(jid))
         return
@@ -17,7 +23,11 @@ def ExitCb(jid: number, j: job, status: number)
     remove(jobs, string(jid))
     matchdelete(state.match_id)
     if status != 0 || empty(state.output)
-        echoerr 'ImproveEnglish failed'
+        var msg = 'ImproveEnglish failed'
+        if state.err != '' && len(state.err) <= 80
+            msg ..= ': ' .. state.err
+        endif
+        echoerr msg
         return
     endif
     if !bufexists(state.bufnr)
@@ -64,8 +74,9 @@ export def ImproveEnglish(line1: number, line2: number)
     var job = job_start(cmd, {
         in_io:   'pipe',
         out_io:  'pipe',
-        err_io:  'null',
+        err_io:  'pipe',
         out_cb:  (ch, data) => OutCb(jid, ch, data),
+        err_cb:  (ch, data) => ErrCb(jid, ch, data),
         exit_cb: (j, status) => ExitCb(jid, j, status),
     })
 
@@ -75,7 +86,7 @@ export def ImproveEnglish(line1: number, line2: number)
         return
     endif
 
-    jobs[string(jid)] = {bufnr: buf, line1: line1, line2: line2, match_id: match_id, output: []}
+    jobs[string(jid)] = {bufnr: buf, line1: line1, line2: line2, match_id: match_id, output: [], err: ''}
     ch_sendraw(job_getchannel(job), text)
     ch_close_in(job_getchannel(job))
     echo 'Improving English...'
