@@ -88,6 +88,12 @@ def ExitCb(jid: number, j: job, status: number)
     endif
     var result = join(state.output, "\n")
     var trimmed = substitute(result, '\n\+$', '', '')
+    if trimmed == 'ERROR:NO_TEXT'
+        echohl WarningMsg
+        echo 'ImproveEnglish: backend received no text'
+        echohl None
+        return
+    endif
     var new_lines = split(trimmed, "\n", 1)
     deletebufline(state.bufnr, state.line1, state.line2)
     appendbufline(state.bufnr, state.line1 - 1, new_lines)
@@ -107,6 +113,7 @@ export def ImproveEnglish(line1: number, line2: number)
     if empty(prompt)
         prompt = 'Improve the English grammar, clarity, and style of the following text. Preserve the original meaning and structure. Output ONLY the improved text with no preamble, explanations, or comments.'
     endif
+    prompt ..= ' If you receive no text to improve, output exactly: ERROR:NO_TEXT'
     var backend = get(g:, 'english_backend', 'claude')
 
     if backend != 'claude'
