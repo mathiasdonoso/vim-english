@@ -20,6 +20,10 @@ git clone https://github.com/mathiasdonoso/vim-english \
   ~/.vim/pack/plugins/start/vim-english
 ```
 
+## Demo
+
+![vim-english demo](assets/demo.gif)
+
 ## Usage
 
 Visually select the text you want to improve, then press `<leader>ie`.
