@@ -1,5 +1,7 @@
 # vim-english
 
+> **Notice:** This project is unmaintained. Its functionality is being remade as a tool in [vim-ai-tools](https://github.com/mathiasdonoso/vim-ai-tools). Please follow that repository for future updates.
+
 For non-native English speakers who write a lot of code comments, commit messages, and documentation — without leaving the editor.
 
 Select any text in Vim and have it corrected and improved in place by an AI.
